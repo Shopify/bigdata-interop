@@ -725,59 +725,88 @@ public class GoogleCloudStorageReadChannel
                 ? "bytes=0-"
                 : String.format("bytes=%d-", newPosition));
     HttpResponse response;
-    try {
-      response = getObject.executeMedia();
-    } catch (IOException e) {
-      if (errorExtractor.itemNotFound(e)) {
-        throw GoogleCloudStorageExceptions.getFileNotFoundException(bucketName, objectName);
-      } else if (errorExtractor.rangeNotSatisfiable(e)
-                 && newPosition == 0
-                 && size == -1) {
-        // We don't know the size yet (size == -1) and we're seeking to byte 0, but got 'range
-        // not satisfiable'; the object must be empty.
-        LOG.info("Got 'range not satisfiable' for reading {} at position 0; assuming empty.",
-            StorageResourceId.createReadableString(bucketName, objectName));
-        size = 0;
-        return new ByteArrayInputStream(new byte[0]);
-      } else {
-        String msg = String.format("Error reading %s at position %d",
-            StorageResourceId.createReadableString(bucketName, objectName), newPosition);
-        if (errorExtractor.rangeNotSatisfiable(e)) {
-          throw (EOFException) (new EOFException(msg).initCause(e));
+    int retriesAttempted = 0;
+    do {
+      try {
+        response = getObject.executeMedia();
+      } catch (IOException e) {
+        if (errorExtractor.itemNotFound(e)) {
+          throw GoogleCloudStorageExceptions.getFileNotFoundException(bucketName, objectName);
+        } else if (errorExtractor.rangeNotSatisfiable(e)
+                && newPosition == 0
+                && size == -1) {
+          // We don't know the size yet (size == -1) and we're seeking to byte 0, but got 'range
+          // not satisfiable'; the object must be empty.
+          LOG.info("Got 'range not satisfiable' for reading {} at position 0; assuming empty.",
+                  StorageResourceId.createReadableString(bucketName, objectName));
+          size = 0;
+          return new ByteArrayInputStream(new byte[0]);
         } else {
+          String msg = String.format("Error reading %s at position %d",
+                  StorageResourceId.createReadableString(bucketName, objectName), newPosition);
+          if (errorExtractor.rangeNotSatisfiable(e)) {
+            throw (EOFException) (new EOFException(msg).initCause(e));
+          } else {
+            // Retry opening the stream for most IOExceptions up to maxRetries times
+            if (retriesAttempted == maxRetries) {
+              LOG.error(
+                      "Already attempted max of {} retries while opening stream '{}'; throwing exception.",
+                      maxRetries, StorageResourceId.createReadableString(bucketName, objectName));
+              throw new IOException(msg, e);
+            }
+            ++retriesAttempted;
+            continue;
+          }
+        }
+      }
+
+      InputStream content = null;
+
+      try {
+        content = response.getContent();
+        if (readOptions.getBufferSize() > 0) {
+          LOG.debug(
+                  "Wrapping response content in BufferedInputStream of size {}",
+                  readOptions.getBufferSize());
+          content = new BufferedInputStream(content, readOptions.getBufferSize());
+        }
+
+        // If the file is gzip encoded, we requested the entire file and need to seek in the content
+        // to the desired position. If it is not, we only requested the bytes we haven't read.
+        setSize(response, fileEncoding == FileEncoding.GZIPPED ? 0 : newPosition);
+        if (fileEncoding == FileEncoding.GZIPPED) {
+          content.skip(newPosition);
+        }
+      } catch (IOException e) {
+        // If we fail to get content close the stream and retry opening
+        try {
+          if (content != null) {
+            content.close();
+          }
+        } catch (IOException closeException) {  // ignore error on close
+          LOG.debug("Caught exception on close after IOException thrown.", closeException);
+          e.addSuppressed(closeException);
+        }
+
+        if (retriesAttempted == maxRetries) {
+          String msg = String.format("Error reading %s at position %d",
+                  StorageResourceId.createReadableString(bucketName, objectName), newPosition);
+          LOG.error(
+                  "Already attempted max of {} retries while reading from stream '{}'; throwing exception.",
+                  maxRetries, StorageResourceId.createReadableString(bucketName, objectName));
           throw new IOException(msg, e);
         }
-      }
-    }
-    InputStream content = null;
-    try {
-      content = response.getContent();
-
-      if (readOptions.getBufferSize() > 0) {
-        LOG.debug(
-            "Wrapping response content in BufferedInputStream of size {}",
-            readOptions.getBufferSize());
-        content = new BufferedInputStream(content, readOptions.getBufferSize());
+        ++retriesAttempted;
+        continue;
       }
 
-      // If the file is gzip encoded, we requested the entire file and need to seek in the content
-      // to the desired position. If it is not, we only requested the bytes we haven't read.
-      setSize(response, fileEncoding == FileEncoding.GZIPPED ? 0 : newPosition);
-      if (fileEncoding == FileEncoding.GZIPPED) {
-        content.skip(newPosition);
+      if (retriesAttempted != 0) {
+        LOG.info("Success after {} retries on opening stream '{}'",
+                retriesAttempted,
+                StorageResourceId.createReadableString(bucketName, objectName));
       }
-    } catch (IOException e) {
-      try {
-        if (content != null) {
-          content.close();
-        }
-      } catch (IOException closeException) {  // ignore error on close
-        LOG.debug("Caught exception on close after IOException thrown.", closeException);
-        e.addSuppressed(closeException);
-      }
-      throw e;
-    }
-    return content;
+      return content;
+    } while (true);
   }
 
   protected Storage.Objects.Get createRequest() throws IOException {
