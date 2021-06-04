@@ -103,7 +103,7 @@
     <google.gson.version>2.2.4</google.gson.version>
 
     <!-- Keep in sync with google-api-client dependency -->
-    <apache.httpcomponents.version>4.0.1</apache.httpcomponents.version>
+    <apache.httpcomponents.version>4.5.13</apache.httpcomponents.version>
 
     <google.api.version>1.23.0</google.api.version>
     <google.api-bigquery.version>v2-rev377-${google.api.version}</google.api-bigquery.version>
