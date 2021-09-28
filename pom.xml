@@ -105,7 +105,7 @@
     <!-- Keep in sync with google-api-client dependency -->
     <apache.httpcomponents.version>4.0.1</apache.httpcomponents.version>
 
-    <google.api.version>1.23.0</google.api.version>
+    <google.api.version>1.32.1</google.api.version>
     <google.api-bigquery.version>v2-rev377-${google.api.version}</google.api-bigquery.version>
     <google.api-storage.version>v1-rev124-${google.api.version}</google.api-storage.version>
     <google.auto-value.version>1.6</google.auto-value.version>
