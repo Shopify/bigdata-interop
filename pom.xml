@@ -110,7 +110,7 @@
     <google.api-storage.version>v1-rev124-${google.api.version}</google.api-storage.version>
     <google.auto-value.version>1.6</google.auto-value.version>
     <google.findbugs.version>3.0.2</google.findbugs.version>
-    <google.guava.version>24.1-jre</google.guava.version>
+    <google.guava.version>29.0-jre</google.guava.version>
     <google.truth.version>0.40</google.truth.version>
     <hadoop.one.version>1.2.1</hadoop.one.version>
     <hadoop.two.version>2.8.3</hadoop.two.version>
