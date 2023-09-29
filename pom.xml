@@ -99,7 +99,7 @@
     <bigdataoss.gcs.hadoop.two.version>1.9.0-SNAPSHOT-hadoop2</bigdataoss.gcs.hadoop.two.version>
 
     <!-- Keep in sync with Hadoop dependencies -->
-    <apache.avro.version>1.7.7</apache.avro.version>
+    <apache.avro.version>1.11.3</apache.avro.version>
     <google.gson.version>2.2.4</google.gson.version>
 
     <!-- Keep in sync with google-api-client dependency -->
